@@ -1,0 +1,251 @@
+Common DevOps Tools & Use Cases
+
+| Tool                    | Use Case                                         |
+| ----------------------- | ------------------------------------------------ |
+| **GitHub Actions**      | CI/CD automation, running workflows              |
+| **Docker**              | Containerizing applications                      |
+| **Kubernetes**          | Orchestrating containers in production           |
+| **Terraform**           | Infrastructure as Code (IaC) for cloud resources |
+| **Ansible**             | Configuration management, app deployment         |
+| **SonarQube**           | Code quality and security analysis               |
+| **Selenium**            | Automated UI testing                             |
+| **Jest/Mocha**          | Unit testing for JavaScript/Node.js apps         |
+| **Trivy**               | Container image vulnerability scanning           |
+| **AWS CLI / Azure CLI** | Managing cloud resources via scripts             |
+
+###########################################################
+
+GitHub Actions Workflow (.yml) with DevOps Tools
+
+# .github/workflows/devops-example.yml
+name: DevOps CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests with Jest
+        run: npm test
+
+      - name: Lint code
+        run: npm run lint
+
+  docker-scan-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t myapp:latest .
+
+      - name: Scan Docker image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: myapp:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker-scan-build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Push image
+        run: |
+          docker tag myapp:latest mydockerhubuser/myapp:latest
+          docker push mydockerhubuser/myapp:latest
+
+      - name: Deploy to Kubernetes (kubectl)
+        uses: azure/k8s-deploy@v4
+        with:
+          manifests: |
+            k8s/deployment.yaml
+            k8s/service.yaml
+
+
+
+##################################
+
+Explanation of Tool Usage in the Workflow
+
+GitHub Actions: Runs the entire CI/CD pipeline.
+
+Node.js + Jest: Runs app and unit tests.
+
+Docker: Builds and tags the container image.
+
+Trivy: Scans Docker image for CVEs.
+
+Kubernetes (kubectl): Deploys the app to a K8s cluster.
+
+DockerHub: Stores and pulls images for deployments.
+
+
+All-in-One DevOps Tools GitHub Actions Workflow
+
+
+# .github/workflows/full-devops-pipeline.yml
+name: Full DevOps CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # STEP 1: Checkout + Build + Test
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests (Jest)
+        run: npm test
+
+      - name: Run Linter
+        run: npm run lint
+
+  # STEP 2: Code Quality with SonarQube
+  code-quality:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        with:
+          projectBaseDir: .
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # STEP 3: Docker Image Build and Scan (Trivy)
+  docker-scan:
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: docker build -t myapp:latest .
+
+      - name: Scan Docker Image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: myapp:latest
+
+  # STEP 4: Terraform Apply (IaC)
+  terraform:
+    runs-on: ubuntu-latest
+    needs: docker-scan
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+  # STEP 5: Ansible Configuration
+  ansible:
+    runs-on: ubuntu-latest
+    needs: terraform
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Ansible
+        run: |
+          sudo apt update
+          sudo apt install -y ansible
+
+      - name: Run Ansible Playbook
+        run: ansible-playbook -i inventory.ini site.yml
+
+  # STEP 6: Deploy to Kubernetes
+  deploy:
+    runs-on: ubuntu-latest
+    needs: ansible
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Set Kubeconfig
+        run: echo "${{ secrets.KUBECONFIG_DATA }}" > kubeconfig && export KUBECONFIG=$PWD/kubeconfig
+
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+
+Tools Covered
+
+
+Tool	Function
+GitHub Actions	CI/CD engine
+Jest	Unit testing
+SonarQube	Code quality scanning
+Trivy	Container vulnerability scanning
+Docker	Containerization
+Terraform	Infrastructure as Code
+Ansible	Configuration management
+Kubernetes	App deployment orchestration
+kubectl	CLI for Kubernetes
